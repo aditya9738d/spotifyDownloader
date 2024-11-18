@@ -35,24 +35,31 @@ def get_spotify_song_name(song_id):
     track = sp.track(song_id)
     return track['name']
 
-def download_audio_from_youtube(video_url, song_name):
-    temp_dir = tempfile.gettempdir()
-    file_path = os.path.join(temp_dir, f"{song_name}.mp3")
+def download_audio_from_youtube(video_url, temp_file_path):
+    # Add a timestamp to the temporary filename to avoid overwriting
+    unique_filename = f"{temp_file_path}_{int(time.time())}.mp3"
 
+    # Set options to download audio directly without converting
     ydl_opts = {
-        'format': 'bestaudio/best',
-        'quiet': True,
-        'outtmpl': file_path,
-        'noplaylist': True,
+        'format': 'bestaudio/best',  # Download the best audio quality
+        'quiet': False,              # Disable quiet mode for debugging
+        'extractaudio': True,        # Only extract audio (no video)
+        'outtmpl': unique_filename,  # Save to the specified temporary file with a unique name
+        'noplaylist': True,          # Avoid downloading the whole playlist if one is found
+        'cookies': 'youtube_cookies.txt',  # Path to the cookies file (relative path)
     }
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([video_url])
-        return file_path
+            print(f"Starting download for {video_url}")
+            ydl.download([video_url])  # Download the audio to the temp file path
+            print(f"Download complete for {video_url}")
+
     except Exception as e:
-        print(f"Error downloading audio: {e}")
-        return None
+        print(f"Error while downloading audio from YouTube: {e}")
+
+    return unique_filename  # Return the unique file path for further use
+
 
 @app.route('/download', methods=['GET'])
 def download_song():
