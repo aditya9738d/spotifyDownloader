@@ -8,7 +8,7 @@ import time
 import tempfile
 from flask_cors import CORS
 
-# Spotify API credentials
+# Get Spotify API credentials from environment variables
 CLIENT_ID = '6fa6c92cdbf64239a09f921a2e7ef207'
 CLIENT_SECRET = '3cb7b2afdf12457f9d8843d58f4c8ae5'
 
@@ -93,10 +93,18 @@ def download_song():
             download_audio_from_youtube(video_url, temp_file_path)
 
             # After downloading, send the file to the client
-            return send_file(temp_file_path, mimetype='audio/mpeg', as_attachment=True, download_name='song.mp3')
+            response = send_file(temp_file_path, mimetype='audio/mpeg', as_attachment=True, download_name='song.mp3')
+
+            # Ensure temporary file cleanup after serving it
+            os.remove(temp_file_path)  # Clean up the temporary file after sending it to the client
+
+            return response
 
     else:
         return {"error": f"No results found for {song_name} on YouTube."}, 404
 
+
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    # Get the dynamic port from the environment (Render or cloud providers)
+    port = int(os.getenv('PORT', 5000))  # Default to 5000 if not provided
+    app.run(debug=True, host='0.0.0.0', port=port)  # Bind to 0.0.0.0 for external access
