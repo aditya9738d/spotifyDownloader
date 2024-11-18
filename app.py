@@ -39,19 +39,50 @@ def search_youtube_for_song(song_name):
             return None
 
 def get_spotify_song_data(song_id):
-    # Fetch the song details using the Spotify track ID
-    track = sp.track(song_id)
-    song_name = track['name']
-    artist_name = track['artists'][0]['name']
-    album_name = track['album']['name']
-    album_cover = track['album']['images'][0]['url']
-    song_data = {
-        'song_name': song_name,
-        'artist_name': artist_name,
-        'album_name': album_name,
-        'album_cover': album_cover
-    }
-    return song_data
+    try:
+        # Fetch the song details using the Spotify track ID
+        track = sp.track(song_id)
+        
+        # Extract basic information
+        song_name = track['name']
+        artist_name = track['artists'][0]['name']
+        album_name = track['album']['name']
+        album_cover = track['album']['images'][0]['url'] if track['album'].get('images') else ''  # Fallback if no cover image
+
+        # Handle missing genre information gracefully
+        genre = track['album']['genres'][0] if track['album'].get('genres') else 'Unknown'  # Default to 'Unknown' if no genres
+
+        # Extract other metadata with error handling for missing fields
+        release_year = track['album']['release_date'][:4] if 'release_date' in track['album'] else 'Unknown'  # Default to 'Unknown' if no release date
+        isrc = track['external_ids'].get('isrc', 'Unknown')  # Default to 'Unknown' if no ISRC available
+        copyright_info = track['copyrights'][0]['text'] if track.get('copyrights') else 'No copyright information'  # Handle missing copyrights
+        track_number = track.get('track_number', 'Unknown')  # Default to 'Unknown' if no track number
+        duration_ms = track['duration_ms']  # Duration in milliseconds
+        duration = f"{(duration_ms // 60000)}:{(duration_ms % 60000) // 1000:02d}"  # Format duration as mm:ss
+
+        # Build the song data object
+        song_data = {
+            'song_name': song_name,
+            'artist_name': artist_name,
+            'album_name': album_name,
+            'album_cover': album_cover,  # Album cover image URL
+            'genre': genre,
+            'release_year': release_year,
+            'isrc': isrc,
+            'copyright_info': copyright_info,
+            'track_number': track_number,
+            'duration': duration,
+        }
+
+        return song_data
+
+    except Exception as e:
+        # Handle any error that occurs and return a message
+        return {
+            'error': str(e),
+            'message': 'An error occurred while fetching song data from Spotify.'
+        }
+
 
 def get_mp3_download_link(song_name):
     """
@@ -67,10 +98,16 @@ def get_mp3_download_link(song_name):
 @app.route('/get-song-details', methods=['GET'])
 def get_song_details():
     # Get the Spotify song ID from query parameters
-    spotify_song_id = request.args.get('spotify_song_id')
+    spotify_song_url = request.args.get('spotify_song_url')
 
-    if not spotify_song_id:
-        return jsonify({'error': 'Spotify song ID is required'}), 400
+    if not spotify_song_url:
+        return jsonify({'error': 'Spotify song URL is required'}), 400
+
+    # Extract the Spotify song ID from the URL
+    try:
+        spotify_song_id = spotify_song_url.split("/track/")[1].split("?")[0]
+    except IndexError:
+        return jsonify({'error': 'Invalid Spotify song URL'}), 400
     
     try:
         # Get song data from Spotify
@@ -99,4 +136,3 @@ if __name__ == "__main__":
     # Get the dynamic port from the environment (Render or cloud providers)
     port = int(os.getenv('PORT', 5000))  # Default to 5000 if not provided
     app.run(debug=True, host='0.0.0.0', port=port)
-
