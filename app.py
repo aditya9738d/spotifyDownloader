@@ -57,6 +57,7 @@ def download_audio_from_youtube(video_url, temp_file_path):
         'extractaudio': True,        # Only extract audio (no video)
         'outtmpl': unique_filename,  # Save to the specified temporary file with a unique name
         'noplaylist': True,          # Avoid downloading the whole playlist if one is found
+        'cookies': os.getenv('YT_COOKIES'),  # Use cookies from environment variable
     }
 
     try:
