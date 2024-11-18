@@ -1,10 +1,9 @@
-import os
-import base64
-import tempfile
 from flask import Flask, request, send_file
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 import yt_dlp
+import os
+import tempfile
 from flask_cors import CORS
 
 # Spotify API credentials
@@ -20,20 +19,6 @@ app = Flask(__name__)
 # Enable CORS for the app
 CORS(app)
 
-# Function to get cookies from environment variable (base64-encoded)
-def get_cookies_from_env():
-    # Get the base64-encoded cookies string from the environment variable
-    encoded_cookies = os.getenv('COOKIES_BASE64')
-    if encoded_cookies:
-        decoded_cookies = base64.b64decode(encoded_cookies)
-        # Write the decoded cookies to a temporary file
-        cookies_path = tempfile.mktemp(prefix="cookies_")
-        with open(cookies_path, 'wb') as f:
-            f.write(decoded_cookies)
-        return cookies_path
-    return None
-
-# Function to search YouTube for the song based on its name
 def search_youtube_for_song(song_name):
     search_query = song_name
     ydl_opts = {
@@ -46,25 +31,19 @@ def search_youtube_for_song(song_name):
             return f"https://www.youtube.com/watch?v={result['entries'][0]['id']}"
     return None
 
-# Function to get the song name from Spotify using the song ID
 def get_spotify_song_name(song_id):
     track = sp.track(song_id)
     return track['name']
 
-# Function to download audio from YouTube using yt-dlp
 def download_audio_from_youtube(video_url, song_name):
     temp_dir = tempfile.gettempdir()
     file_path = os.path.join(temp_dir, f"{song_name}.mp3")
-
-    # Get the path of cookies from environment
-    cookies_path = get_cookies_from_env()
 
     ydl_opts = {
         'format': 'bestaudio/best',
         'quiet': True,
         'outtmpl': file_path,
         'noplaylist': True,
-        'cookies': cookies_path,  # Use cookies here
     }
 
     try:
@@ -75,7 +54,6 @@ def download_audio_from_youtube(video_url, song_name):
         print(f"Error downloading audio: {e}")
         return None
 
-# Route to handle downloading a song from Spotify and YouTube
 @app.route('/download', methods=['GET'])
 def download_song():
     spotify_song_id = request.args.get('spotify_song_id')
@@ -102,7 +80,6 @@ def download_song():
     except Exception as e:
         return {"error": str(e)}, 500
 
-# Main entry point for the app
 if __name__ == "__main__":
     # Get the dynamic port from the environment (Render or cloud providers)
     port = int(os.getenv('PORT', 5000))  # Default to 5000 if not provided
