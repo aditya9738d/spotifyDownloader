@@ -4,6 +4,7 @@ from spotipy.oauth2 import SpotifyClientCredentials
 import yt_dlp
 import os
 import tempfile
+import time  # <-- Import time module
 from flask_cors import CORS
 
 # Spotify API credentials
@@ -37,7 +38,7 @@ def get_spotify_song_name(song_id):
 
 def download_audio_from_youtube(video_url, temp_file_path):
     # Add a timestamp to the temporary filename to avoid overwriting
-    unique_filename = f"{temp_file_path}_{int(time.time())}.mp3"
+    unique_filename = f"{temp_file_path}_{int(time.time())}.mp3"  # <-- Using time.time()
 
     # Set options to download audio directly without converting
     ydl_opts = {
