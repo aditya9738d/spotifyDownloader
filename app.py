@@ -38,7 +38,7 @@ def get_spotify_song_name(song_id):
 
 def download_audio_from_youtube(video_url, temp_file_path):
     # Add a timestamp to the temporary filename to avoid overwriting
-    unique_filename = f"{temp_file_path}_{int(time.time())}.mp3"  # <-- Using time.time()
+    unique_filename = f"{temp_file_path}_{int(time.time())}.mp3"
 
     # Set options to download audio directly without converting
     ydl_opts = {
@@ -47,7 +47,7 @@ def download_audio_from_youtube(video_url, temp_file_path):
         'extractaudio': True,        # Only extract audio (no video)
         'outtmpl': unique_filename,  # Save to the specified temporary file with a unique name
         'noplaylist': True,          # Avoid downloading the whole playlist if one is found
-        'cookies': 'youtube_cookies.txt',  # Path to the cookies file (relative path)
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',  # Mimicking a standard browser user-agent
     }
 
     try:
@@ -60,7 +60,6 @@ def download_audio_from_youtube(video_url, temp_file_path):
         print(f"Error while downloading audio from YouTube: {e}")
 
     return unique_filename  # Return the unique file path for further use
-
 
 @app.route('/download', methods=['GET'])
 def download_song():
