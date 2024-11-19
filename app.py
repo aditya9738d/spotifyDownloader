@@ -5,6 +5,7 @@ from flask import Flask, request, jsonify
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 import yt_dlp
+from flask_cors import CORS  # Importing CORS from flask_cors
 
 # Spotify API credentials
 CLIENT_ID = '6fa6c92cdbf64239a09f921a2e7ef207'
@@ -15,8 +16,13 @@ sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(client_id=CLIENT_ID, 
 
 app = Flask(__name__)
 
+# Enable CORS for all routes and origins (you can restrict this later as needed)
+CORS(app)
+
 def search_youtube_for_song(song_name):
-    # Perform a search on YouTube (including YouTube Music) using yt-dlp's built-in search functionality
+    """
+    Perform a search on YouTube (including YouTube Music) using yt-dlp's built-in search functionality.
+    """
     search_query = song_name  # Simply search for the song name without site filtering
     
     ydl_opts = {
@@ -33,12 +39,15 @@ def search_youtube_for_song(song_name):
         if 'entries' in result and result['entries']:
             # Get the first video ID from search results
             video_id = result['entries'][0]['id']
-            return video_id
+            return video_id, result['entries'][0]['url']
         else:
             print(f"No results found for '{song_name}' on YouTube.")
-            return None
+            return None, None
 
 def get_spotify_song_data(song_id):
+    """
+    Fetch song data (name, artist, album) from Spotify using the song ID.
+    """
     try:
         # Fetch the song details using the Spotify track ID
         track = sp.track(song_id)
@@ -84,19 +93,51 @@ def get_spotify_song_data(song_id):
         }
 
 
-def get_mp3_download_link(song_name):
+def get_mp3_download_link(video_id):
     """
     Function to retrieve an MP3 download link from a third-party source.
-    For now, using a mock example URL (the one you provided).
+    Downloads the MP3 file from the YouTube MP3 download API.
     """
-    # You can modify this to fetch dynamically from a service or database
-    mp3_download_link = f'https://mbeta.123tokyo.xyz/get.php/1/49/_iktURk0X-A.mp3?cid=MmEwMTo0Zjg6YzAxMjozMmVlOjoxfE5BfERF&h=U2ysMxF2xlxC7uAjaHLugQ&s=1731937392&n=Phir%20Bhi%20Tumko%20Chaahunga%20-%20Full%20Song%20_%20Arijit%20Singh%20_%20Arjun%20K%20%26%20Shraddha%20K%20_%20Mithoon%2C%20Manoj%20K&uT=R&uN=YWRpdHlhOTczOA%3D%3D'
+    # API URL to fetch the MP3 download link
+    url = f'https://youtube-mp36.p.rapidapi.com/dl?id={video_id}'
     
-    # You could potentially integrate this with a third-party API or another method
-    return mp3_download_link
+    # Headers to include in the request (ensure you have a valid RapidAPI key)
+    headers = {
+        'x-rapidapi-host': 'youtube-mp36.p.rapidapi.com',
+        'x-rapidapi-key': '3dab8d0338msh860dc1baf2f6e9bp1a3029jsna4a66ccdd07d'
+    }
+
+    # Send the GET request
+    response = requests.get(url, headers=headers)
+
+    # Check if the request was successful
+    if response.status_code == 200:
+        # Parse the response JSON to get the download URL
+        data = response.json()
+
+        # Debugging: print the full API response to understand why it's failing
+        print(f"API Response: {data}")  # Debugging: print the full response
+
+        if "link" in data:
+            # Extract the MP3 download URL
+            download_url = data['link']
+            print(f"Download URL: {download_url}")
+            return download_url
+        else:
+            print("Failed to find the download URL in the response.")
+            return None
+    else:
+        # Handle errors and print the response details
+        print(f"Error: {response.status_code}")
+        print("Response Body:", response.text)
+        return None
+
 
 @app.route('/get-song-details', methods=['GET'])
 def get_song_details():
+    """
+    Endpoint to fetch song details, YouTube video ID, and MP3 download link.
+    """
     # Get the Spotify song ID from query parameters
     spotify_song_url = request.args.get('spotify_song_url')
 
@@ -114,15 +155,16 @@ def get_song_details():
         song_data = get_spotify_song_data(spotify_song_id)
         
         # Search for the song on YouTube and get the video ID
-        video_id = search_youtube_for_song(song_data['song_name'])
+        video_id, video_url = search_youtube_for_song(song_data['song_name'])
         
         if video_id:
             song_data['youtube_video_id'] = video_id
-            song_data['youtube_video_url'] = f'https://www.youtube.com/watch?v={video_id}'
+            song_data['youtube_video_url'] = video_url
             
             # Get the MP3 download link
-            mp3_download_link = get_mp3_download_link(song_data['song_name'])
-            song_data['mp3_download_link'] = mp3_download_link
+            mp3_download_link = get_mp3_download_link(video_id)
+            if mp3_download_link:
+                song_data['mp3_download_link'] = mp3_download_link
             
             return jsonify(song_data)
         else:
