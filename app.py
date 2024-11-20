@@ -33,9 +33,6 @@ def search_youtube_for_song(song_name):
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         result = ydl.extract_info(f"ytsearch:{search_query}", download=False)
 
-        # Debugging: print the raw search results to understand what we got
-        sys.stdout.buffer.write(f"Search result for '{song_name}': {result}\n".encode('utf-8'))
-
         if 'entries' in result and result['entries']:
             # Get the first video ID from search results
             video_id = result['entries'][0]['id']
@@ -86,12 +83,7 @@ def get_spotify_song_data(song_id):
         return song_data
 
     except Exception as e:
-        # Handle any error that occurs and return a message
-        return {
-            'error': str(e),
-            'message': 'An error occurred while fetching song data from Spotify.'
-        }
-
+        return {'error': str(e), 'message': 'An error occurred while fetching song data from Spotify.'}
 
 def get_mp3_download_link(video_id):
     """
@@ -101,7 +93,6 @@ def get_mp3_download_link(video_id):
     # API URL to fetch the MP3 download link
     url = f'https://youtube-mp36.p.rapidapi.com/dl?id={video_id}'
     
-    # Headers to include in the request (ensure you have a valid RapidAPI key)
     headers = {
         'x-rapidapi-host': 'youtube-mp36.p.rapidapi.com',
         'x-rapidapi-key': '3dab8d0338msh860dc1baf2f6e9bp1a3029jsna4a66ccdd07d'
@@ -110,71 +101,125 @@ def get_mp3_download_link(video_id):
     # Send the GET request
     response = requests.get(url, headers=headers)
 
-    # Check if the request was successful
     if response.status_code == 200:
-        # Parse the response JSON to get the download URL
         data = response.json()
-
-        # Debugging: print the full API response to understand why it's failing
-        print(f"API Response: {data}")  # Debugging: print the full response
-
+        
+        # Log the full response for debugging
+        print(f"Full API Response: {data}")
+        
         if "link" in data:
-            # Extract the MP3 download URL
-            download_url = data['link']
-            print(f"Download URL: {download_url}")
-            return download_url
+            return data['link']
         else:
-            print("Failed to find the download URL in the response.")
-            return None
+            print("No 'link' found in API response.")
     else:
-        # Handle errors and print the response details
         print(f"Error: {response.status_code}")
-        print("Response Body:", response.text)
-        return None
+        print(f"Response Body: {response.text}")
+    return None
 
 
-@app.route('/get-song-details', methods=['GET'])
-def get_song_details():
+@app.route('/get-music-details', methods=['GET'])
+def get_music_details():
     """
-    Endpoint to fetch song details, YouTube video ID, and MP3 download link.
+    General endpoint to fetch track, album, or playlist details, YouTube video ID, and MP3 download links.
     """
-    # Get the Spotify song ID from query parameters
-    spotify_song_url = request.args.get('spotify_song_url')
+    # Get the URL from query parameters
+    spotify_url = request.args.get('spotify_url')
 
-    if not spotify_song_url:
-        return jsonify({'error': 'Spotify song URL is required'}), 400
+    if not spotify_url:
+        return jsonify({'error': 'Spotify URL is required'}), 400
 
-    # Extract the Spotify song ID from the URL
-    try:
-        spotify_song_id = spotify_song_url.split("/track/")[1].split("?")[0]
-    except IndexError:
-        return jsonify({'error': 'Invalid Spotify song URL'}), 400
+    # Identify whether the URL is a track, album, or playlist and extract the ID
+    if 'track' in spotify_url:
+        try:
+            spotify_track_id = spotify_url.split("/track/")[1].split("?")[0]
+            track_data = get_spotify_song_data(spotify_track_id)
+
+            # Search YouTube for the song and get the video ID
+            video_id, video_url = search_youtube_for_song(track_data['song_name'])
+            if video_id:
+                track_data['youtube_video_id'] = video_id
+                track_data['youtube_video_url'] = video_url
+
+                # Get the MP3 download link
+                mp3_download_link = get_mp3_download_link(video_id)
+                if mp3_download_link:
+                    track_data['mp3_download_link'] = mp3_download_link
+
+            return jsonify([track_data])
+
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
     
-    try:
-        # Get song data from Spotify
-        song_data = get_spotify_song_data(spotify_song_id)
-        
-        # Search for the song on YouTube and get the video ID
-        video_id, video_url = search_youtube_for_song(song_data['song_name'])
-        
-        if video_id:
-            song_data['youtube_video_id'] = video_id
-            song_data['youtube_video_url'] = video_url
-            
-            # Get the MP3 download link
-            mp3_download_link = get_mp3_download_link(video_id)
-            if mp3_download_link:
-                song_data['mp3_download_link'] = mp3_download_link
-            
-            return jsonify(song_data)
-        else:
-            return jsonify({'error': 'No YouTube video found for this song'}), 404
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    elif 'album' in spotify_url:
+        try:
+            # Fix: Extract album ID and remove any extra query parameters like 'highlight'
+            spotify_album_id = spotify_url.split("/album/")[1].split("?")[0]
+
+            # Fetch the album's tracks
+            album_tracks = sp.album_tracks(spotify_album_id)
+
+            # Check if the album contains any tracks
+            if 'items' not in album_tracks or not album_tracks['items']:
+                return jsonify({'error': 'No tracks found in this album'}), 404
+
+            album_data = []
+            for item in album_tracks['items']:
+                song_id = item['id']
+                song_data = get_spotify_song_data(song_id)
+                
+                # Search YouTube for each song and get the video ID
+                video_id, video_url = search_youtube_for_song(song_data['song_name'])
+                if video_id:
+                    song_data['youtube_video_id'] = video_id
+                    song_data['youtube_video_url'] = video_url
+
+                    # Get the MP3 download link
+                    mp3_download_link = get_mp3_download_link(video_id)
+                    if mp3_download_link:
+                        song_data['mp3_download_link'] = mp3_download_link
+
+                album_data.append(song_data)
+
+            return jsonify(album_data)
+
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    elif 'playlist' in spotify_url:
+        try:
+            spotify_playlist_id = spotify_url.split("/playlist/")[1].split("?")[0]
+            playlist_tracks = sp.playlist_tracks(spotify_playlist_id)
+
+            # Check if the playlist contains any tracks
+            if 'items' not in playlist_tracks or not playlist_tracks['items']:
+                return jsonify({'error': 'No tracks found in this playlist'}), 404
+
+            playlist_data = []
+            for item in playlist_tracks['items']:
+                song_id = item['track']['id']
+                song_data = get_spotify_song_data(song_id)
+                
+                # Search YouTube for each song and get the video ID
+                video_id, video_url = search_youtube_for_song(song_data['song_name'])
+                if video_id:
+                    song_data['youtube_video_id'] = video_id
+                    song_data['youtube_video_url'] = video_url
+
+                    # Get the MP3 download link
+                    mp3_download_link = get_mp3_download_link(video_id)
+                    if mp3_download_link:
+                        song_data['mp3_download_link'] = mp3_download_link
+
+                playlist_data.append(song_data)
+
+            return jsonify(playlist_data)
+
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    else:
+        return jsonify({'error': 'Invalid Spotify URL type (track, album, or playlist required)'}), 400
 
 
 if __name__ == "__main__":
-    # Get the dynamic port from the environment (Render or cloud providers)
-    port = int(os.getenv('PORT', 5000))  # Default to 5000 if not provided
+    port = int(os.environ.get("PORT", 5000))
     app.run(debug=True, host='0.0.0.0', port=port)
