@@ -140,10 +140,6 @@ def get_music_details():
                 track_data['youtube_video_id'] = video_id
                 track_data['youtube_video_url'] = video_url
 
-                # Get the MP3 download link
-                mp3_download_link = get_mp3_download_link(video_id)
-                if mp3_download_link:
-                    track_data['mp3_download_link'] = mp3_download_link
 
             return jsonify([track_data])
 
@@ -173,10 +169,6 @@ def get_music_details():
                     song_data['youtube_video_id'] = video_id
                     song_data['youtube_video_url'] = video_url
 
-                    # Get the MP3 download link
-                    mp3_download_link = get_mp3_download_link(video_id)
-                    if mp3_download_link:
-                        song_data['mp3_download_link'] = mp3_download_link
 
                 album_data.append(song_data)
 
@@ -205,11 +197,6 @@ def get_music_details():
                     song_data['youtube_video_id'] = video_id
                     song_data['youtube_video_url'] = video_url
 
-                    # Get the MP3 download link
-                    mp3_download_link = get_mp3_download_link(video_id)
-                    if mp3_download_link:
-                        song_data['mp3_download_link'] = mp3_download_link
-
                 playlist_data.append(song_data)
 
             return jsonify(playlist_data)
@@ -219,6 +206,19 @@ def get_music_details():
     else:
         return jsonify({'error': 'Invalid Spotify URL type (track, album, or playlist required)'}), 400
 
+@app.route('/get-music-download', methods=['GET'])
+def get_mp3_download():
+    """Fetch the MP3 download link."""
+    video_id = request.args.get('video_id')
+    if not video_id:
+        return jsonify({'error': 'Video ID is required'}), 400
+    try:
+        mp3_download_link = get_mp3_download_link(video_id)
+        if mp3_download_link:
+            return jsonify({'mp3_download_link': mp3_download_link})
+        return jsonify({'error': 'MP3 download link not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
