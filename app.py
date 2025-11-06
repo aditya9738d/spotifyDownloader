@@ -8,7 +8,6 @@ from functools import lru_cache
 from flask import Flask, request, jsonify, Response, send_file
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
-import yt_dlp
 from flask_cors import CORS
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -83,7 +82,7 @@ CACHE_TTL = 24 * 60 * 60  # 24 hours in seconds
 @lru_cache(maxsize=1000)
 def search_youtube_for_song(song_name):
     """
-    Perform a search on YouTube (including YouTube Music) using yt-dlp's built-in search functionality.
+    Perform a search on YouTube using YouTube Data API or simple search.
     Uses caching to avoid repeated searches for the same song.
     """
     # Check cache first
@@ -95,41 +94,26 @@ def search_youtube_for_song(song_name):
         if current_time - cache_entry['timestamp'] < CACHE_TTL:
             return cache_entry['video_id'], cache_entry['url']
     
-    search_query = song_name
-    
-    ydl_opts = {
-        'quiet': True,
-        'extract_flat': True,
-        'no_warnings': True,
-        'ignoreerrors': True,
-        'socket_timeout': 30,
-        # Anti-bot measures
-        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'referer': 'https://www.youtube.com/',
-        'extractor_args': {
-            'youtube': {
-                'skip': ['dash', 'hls'],
-                'player_skip': ['js'],
-                'player_client': ['web'],
-            }
-        },
-        'http_headers': {
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'en-us,en;q=0.5',
-            'Accept-Encoding': 'gzip, deflate',
-            'DNT': '1',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1',
-        }
-    }
+    search_query = song_name.replace(' ', '+')
     
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            result = ydl.extract_info(f"ytsearch:{search_query}", download=False)
-
-            if 'entries' in result and result['entries']:
-                video_id = result['entries'][0]['id']
-                url = result['entries'][0]['url']
+        # Simple YouTube search using requests
+        search_url = f"https://www.youtube.com/results?search_query={search_query}"
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+        
+        response = session.get(search_url, headers=headers, timeout=10)
+        
+        if response.status_code == 200:
+            # Extract video ID from the HTML response
+            import re
+            video_pattern = r'"videoId":"([a-zA-Z0-9_-]{11})"'
+            matches = re.findall(video_pattern, response.text)
+            
+            if matches:
+                video_id = matches[0]
+                url = f"https://www.youtube.com/watch?v={video_id}"
                 
                 # Cache the result
                 youtube_search_cache[cache_key] = {
@@ -140,8 +124,12 @@ def search_youtube_for_song(song_name):
                 
                 return video_id, url
             else:
-                print(f"No results found for '{song_name}' on YouTube.")
+                print(f"No video ID found for '{song_name}' on YouTube.")
                 return None, None
+        else:
+            print(f"YouTube search failed with status code: {response.status_code}")
+            return None, None
+            
     except Exception as e:
         print(f"Error searching YouTube for '{song_name}': {str(e)}")
         return None, None
